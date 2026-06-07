@@ -57,11 +57,11 @@ export default defineConfig({
     })
   ],
   server: {
-    port: 8150,
+    port: 8100,
     host: true
   },
   preview: {
-    port: 8150,
+    port: 8100,
     host: true
   }
 });
