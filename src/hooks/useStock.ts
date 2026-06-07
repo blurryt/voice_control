@@ -46,17 +46,11 @@ export interface UseStockResult {
   items: StockItem[];
   selectedItem: StockItem | null;
   logs: CommandLog[];
-
   selectItem: (id: string) => void;
   findByName: (nome: string) => StockItem | undefined;
-
-  /** Retorna o item atualizado ou null se não encontrado */
   add: (id: string, quantidade: number) => StockItem | null;
-  /** Retorna o item e se a operação foi bem-sucedida (não permite negativo) */
   subtract: (id: string, quantidade: number) => { item: StockItem | null; sufficient: boolean };
-  /** Define quantidade absoluta */
   setQuantity: (id: string, quantidade: number) => StockItem | null;
-
   addLog: (log: Omit<CommandLog, 'id'>) => void;
   clearLogs: () => void;
   resetStock: () => void;
@@ -67,12 +61,10 @@ export function useStock(): UseStockResult {
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [logs, setLogs] = useState<CommandLog[]>(() => carregarLogs());
 
-  // Persiste itens automaticamente
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
   }, [items]);
 
-  // Persiste logs (limita a 50)
   useEffect(() => {
     localStorage.setItem(LOG_KEY, JSON.stringify(logs.slice(0, 50)));
   }, [logs]);
@@ -88,12 +80,8 @@ export function useStock(): UseStockResult {
   const findByName = useCallback((nome: string): StockItem | undefined => {
     if (!nome) return undefined;
     const nomeNorm = normalizar(nome);
-
-    // Match exato
     const exato = items.find(i => normalizar(i.nome) === nomeNorm);
     if (exato) return exato;
-
-    // Match parcial
     return items.find(i => {
       const itemNorm = normalizar(i.nome);
       return itemNorm.includes(nomeNorm) || nomeNorm.includes(itemNorm);
@@ -101,18 +89,20 @@ export function useStock(): UseStockResult {
   }, [items]);
 
   const add = useCallback((id: string, quantidade: number): StockItem | null => {
-    let atualizado: StockItem | null = null;
-    setItems(prev => prev.map(item => {
-      if (item.id !== id) return item;
-      atualizado = {
-        ...item,
-        quantidade: item.quantidade + quantidade,
-        ultimaAtualizacao: new Date()
-      };
-      return atualizado;
-    }));
+    // Calcula o item atualizado ANTES do setItems (que é assíncrono)
+    // para que o retorno já tenha a quantidade correta para o feedback de voz
+    const atual = items.find(i => i.id === id);
+    if (!atual) return null;
+
+    const atualizado: StockItem = {
+      ...atual,
+      quantidade: atual.quantidade + quantidade,
+      ultimaAtualizacao: new Date()
+    };
+
+    setItems(prev => prev.map(i => i.id === id ? atualizado : i));
     return atualizado;
-  }, []);
+  }, [items]);
 
   const subtract = useCallback((id: string, quantidade: number) => {
     const atual = items.find(i => i.id === id);
@@ -121,33 +111,30 @@ export function useStock(): UseStockResult {
       return { item: atual, sufficient: false };
     }
 
-    let atualizado: StockItem | null = null;
-    setItems(prev => prev.map(item => {
-      if (item.id !== id) return item;
-      atualizado = {
-        ...item,
-        quantidade: item.quantidade - quantidade,
-        ultimaAtualizacao: new Date()
-      };
-      return atualizado;
-    }));
+    const atualizado: StockItem = {
+      ...atual,
+      quantidade: atual.quantidade - quantidade,
+      ultimaAtualizacao: new Date()
+    };
+
+    setItems(prev => prev.map(i => i.id === id ? atualizado : i));
     return { item: atualizado, sufficient: true };
   }, [items]);
 
   const setQuantity = useCallback((id: string, quantidade: number): StockItem | null => {
     if (quantidade < 0) return null;
-    let atualizado: StockItem | null = null;
-    setItems(prev => prev.map(item => {
-      if (item.id !== id) return item;
-      atualizado = {
-        ...item,
-        quantidade,
-        ultimaAtualizacao: new Date()
-      };
-      return atualizado;
-    }));
+    const atual = items.find(i => i.id === id);
+    if (!atual) return null;
+
+    const atualizado: StockItem = {
+      ...atual,
+      quantidade,
+      ultimaAtualizacao: new Date()
+    };
+
+    setItems(prev => prev.map(i => i.id === id ? atualizado : i));
     return atualizado;
-  }, []);
+  }, [items]);
 
   const addLog = useCallback((log: Omit<CommandLog, 'id'>) => {
     const novoLog: CommandLog = {
@@ -168,16 +155,9 @@ export function useStock(): UseStockResult {
   }, []);
 
   return {
-    items,
-    selectedItem,
-    logs,
-    selectItem,
-    findByName,
-    add,
-    subtract,
-    setQuantity,
-    addLog,
-    clearLogs,
-    resetStock
+    items, selectedItem, logs,
+    selectItem, findByName,
+    add, subtract, setQuantity,
+    addLog, clearLogs, resetStock
   };
 }
