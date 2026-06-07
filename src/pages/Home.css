@@ -1,0 +1,423 @@
+/* Voice Stock - Estética industrial / utilitária */
+
+ion-content.content-bg {
+  --background: var(--vs-bg);
+  --color: var(--vs-text);
+}
+
+.title-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.title-wrapper ion-icon {
+  font-size: 24px;
+  vertical-align: middle;
+}
+
+/* ===== Aviso ===== */
+.aviso-card {
+  margin: 16px;
+}
+
+.aviso-card ion-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+}
+
+/* ===== Painel item selecionado ===== */
+.painel-selecionado {
+  margin: 16px;
+  padding: 24px 20px;
+  background: linear-gradient(135deg, var(--vs-surface) 0%, var(--vs-surface-2) 100%);
+  border: 1px solid var(--vs-border);
+  border-left: 4px solid var(--vs-amber);
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.painel-selecionado::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 120px;
+  height: 120px;
+  background: radial-gradient(circle, var(--vs-amber-soft) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.painel-selecionado.vazio {
+  border-left-color: var(--vs-text-dim);
+  text-align: center;
+}
+
+.selecionado-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--vs-amber);
+  margin-bottom: 8px;
+}
+
+.painel-selecionado.vazio .selecionado-label {
+  color: var(--vs-text-dim);
+}
+
+.selecionado-nome {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--vs-text);
+  margin-bottom: 4px;
+}
+
+.selecionado-qtd {
+  font-size: 56px;
+  font-weight: 800;
+  color: var(--vs-amber);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  margin: 12px 0 4px;
+}
+
+.selecionado-qtd .unidade {
+  font-size: 18px;
+  color: var(--vs-text-dim);
+  margin-left: 8px;
+  font-weight: 500;
+}
+
+.selecionado-cat {
+  font-size: 13px;
+  color: var(--vs-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.selecionado-dica {
+  color: var(--vs-text-dim);
+  font-size: 14px;
+  line-height: 1.6;
+  margin-top: 8px;
+}
+
+.selecionado-dica strong {
+  color: var(--vs-amber);
+}
+
+/* ===== Microfone ===== */
+.mic-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 16px;
+}
+
+.mic-button {
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  border: none;
+  background: var(--vs-surface);
+  color: var(--vs-text-dim);
+  cursor: pointer;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.mic-button ion-icon {
+  font-size: 48px;
+  z-index: 2;
+  position: relative;
+}
+
+.mic-button:hover:not(:disabled) {
+  transform: scale(1.05);
+  background: var(--vs-surface-2);
+}
+
+.mic-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.mic-button.ativo {
+  background: var(--vs-amber);
+  color: var(--vs-bg);
+  box-shadow: 0 0 0 4px var(--vs-amber-soft),
+              0 6px 30px rgba(255, 182, 39, 0.4);
+}
+
+.mic-pulse {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 50%;
+  border: 2px solid var(--vs-amber);
+  animation: pulso 1.6s ease-out infinite;
+}
+
+.mic-pulse.delay {
+  animation-delay: 0.8s;
+}
+
+@keyframes pulso {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+.mic-status {
+  margin-top: 16px;
+  font-size: 13px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.status-on {
+  color: var(--vs-amber);
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+}
+
+.status-on::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: var(--vs-red);
+  border-radius: 50%;
+  margin-right: 8px;
+  animation: blink 1s infinite;
+}
+
+.status-off { color: var(--vs-text-dim); }
+.status-erro { color: var(--vs-red); }
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0.2; }
+}
+
+.transcript-box {
+  margin-top: 20px;
+  padding: 14px 18px;
+  background: var(--vs-surface);
+  border: 1px dashed var(--vs-border);
+  border-radius: 6px;
+  min-width: 80%;
+  max-width: 92%;
+  text-align: center;
+  font-size: 15px;
+}
+
+.transcript-box .interim {
+  color: var(--vs-text-dim);
+  font-style: italic;
+}
+
+.transcript-box .final {
+  color: var(--vs-text);
+  font-weight: 600;
+}
+
+/* ===== Feedback ===== */
+.feedback {
+  margin: 8px 16px;
+  border-left: 4px solid var(--vs-blue);
+}
+
+.feedback.sucesso { border-left-color: var(--vs-green); }
+.feedback.erro { border-left-color: var(--vs-red); }
+.feedback.aviso { border-left-color: var(--vs-amber); }
+
+.feedback ion-card-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+}
+
+.feedback ion-card-content ion-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+/* ===== Seção título ===== */
+.secao-titulo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 20px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--vs-text-dim);
+  text-transform: uppercase;
+}
+
+.secao-titulo ion-icon {
+  font-size: 16px;
+  color: var(--vs-amber);
+}
+
+.secao-titulo ion-button {
+  margin-left: auto;
+  --color: var(--vs-text-dim);
+  font-size: 11px;
+}
+
+/* ===== Lista itens ===== */
+.lista-itens {
+  background: transparent;
+  padding: 0 12px;
+}
+
+.lista-itens ion-item {
+  --background: var(--vs-surface);
+  --background-hover: var(--vs-surface-2);
+  --color: var(--vs-text);
+  --border-radius: 6px;
+  margin-bottom: 6px;
+  border: 1px solid var(--vs-border);
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.lista-itens ion-item.ativo {
+  --background: var(--vs-surface-2);
+  border-color: var(--vs-amber);
+  box-shadow: 0 0 0 1px var(--vs-amber);
+}
+
+.lista-itens ion-item h2 {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.lista-itens ion-item p {
+  color: var(--vs-text-dim);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.badge-qtd {
+  min-width: 56px;
+  height: 56px;
+  padding: 0 10px;
+  background: var(--vs-bg);
+  border: 1px solid var(--vs-border);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--vs-amber);
+  font-variant-numeric: tabular-nums;
+  margin-right: 12px;
+}
+
+.badge-qtd.baixo {
+  color: var(--vs-amber);
+  border-color: var(--vs-amber);
+}
+
+.badge-qtd.zero {
+  color: var(--vs-red);
+  border-color: var(--vs-red);
+}
+
+/* ===== Logs ===== */
+.lista-logs {
+  background: transparent;
+  padding: 0 12px;
+}
+
+.lista-logs ion-item {
+  --background: var(--vs-surface);
+  --color: var(--vs-text);
+  --min-height: 56px;
+  margin-bottom: 4px;
+  border: 1px solid var(--vs-border);
+  border-radius: 6px;
+}
+
+.lista-logs ion-item h3 {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.lista-logs ion-item p {
+  font-size: 12px;
+  color: var(--vs-text-dim);
+}
+
+.lista-logs ion-item .hora {
+  font-size: 10px;
+  letter-spacing: 0.5px;
+}
+
+/* ===== Ajuda ===== */
+.card-ajuda {
+  margin: 16px;
+  background: var(--vs-surface);
+  color: var(--vs-text);
+  border: 1px solid var(--vs-border);
+  box-shadow: none;
+}
+
+.card-ajuda ion-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  color: var(--vs-text);
+}
+
+.card-ajuda ion-card-title ion-icon {
+  color: var(--vs-amber);
+}
+
+.cmd-exemplo {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--vs-border);
+}
+
+.cmd-exemplo:last-child {
+  border-bottom: none;
+}
+
+.cmd-exemplo strong {
+  color: var(--vs-amber);
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+
+.cmd-exemplo span {
+  color: var(--vs-text-dim);
+  font-size: 12px;
+}
