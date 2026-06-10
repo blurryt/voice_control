@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
-// Tipos básicos para Web Speech API (não vêm com TypeScript por padrão)
 interface ISpeechRecognitionEvent {
   resultIndex: number;
   results: {
@@ -41,49 +40,37 @@ declare global {
 }
 
 export interface UseSpeechRecognitionResult {
-  /** Está ouvindo o microfone agora? */
   isListening: boolean;
-  /** Texto sendo reconhecido em tempo real (parcial) */
   interimTranscript: string;
-  /** Último texto final reconhecido */
   finalTranscript: string;
-  /** Mensagem de erro mais recente, se houver */
   error: string | null;
-  /** API suportada pelo navegador? */
   isSupported: boolean;
-  /** Inicia a escuta */
   start: () => void;
-  /** Para a escuta */
   stop: () => void;
-  /** Alterna entre iniciar/parar */
   toggle: () => void;
-  /** Fala um texto via SpeechSynthesis (feedback auditivo) */
   speak: (text: string) => void;
 }
 
-/**
- * Hook para usar a Web Speech API.
- * Configurado para português do Brasil, reconhecimento contínuo,
- * com resultados parciais em tempo real.
- *
- * Cada vez que uma frase final é reconhecida, `finalTranscript` recebe
- * o texto (sempre como nova referência para forçar re-render mesmo
- * quando o texto é igual ao anterior).
- */
 export function useSpeechRecognition(
   onFinalResult?: (text: string) => void
 ): UseSpeechRecognitionResult {
 
-  const recognitionRef = useRef<ISpeechRecognition | null>(null);
-  const onFinalResultRef = useRef(onFinalResult);
-  const shouldKeepListeningRef = useRef(false);
+  const recognitionRef          = useRef<ISpeechRecognition | null>(null);
+  const onFinalResultRef        = useRef(onFinalResult);
+  const shouldKeepListeningRef  = useRef(false);
 
-  const [isListening, setIsListening] = useState(false);
+  // Guarda o último texto JÁ processado para não repetir o mesmo comando
+  const lastProcessedTextRef    = useRef<string>('');
+
+  // Trava o reinício enquanto a síntese de voz está falando,
+  // evitando que o microfone capture a própria resposta do app
+  const isSpeakingRef           = useRef(false);
+
+  const [isListening, setIsListening]           = useState(false);
   const [interimTranscript, setInterimTranscript] = useState('');
-  const [finalTranscript, setFinalTranscript] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [finalTranscript, setFinalTranscript]   = useState('');
+  const [error, setError]                       = useState<string | null>(null);
 
-  // Mantém a referência da callback sempre atualizada (sem reiniciar a API)
   useEffect(() => {
     onFinalResultRef.current = onFinalResult;
   }, [onFinalResult]);
@@ -99,9 +86,9 @@ export function useSpeechRecognition(
     if (!SpeechRecognitionAPI) return;
 
     const recognition = new SpeechRecognitionAPI();
-    recognition.lang = 'pt-BR';
-    recognition.continuous = true;
-    recognition.interimResults = true;
+    recognition.lang            = 'pt-BR';
+    recognition.continuous      = true;
+    recognition.interimResults  = true;
     recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
@@ -113,23 +100,32 @@ export function useSpeechRecognition(
       setIsListening(false);
       setInterimTranscript('');
 
-      // Em alguns navegadores, o `continuous` ainda assim para depois
-      // de um período de silêncio. Reinicia se o usuário ainda queria ouvir.
-      if (shouldKeepListeningRef.current) {
-        try {
-          recognition.start();
-        } catch {
-          // ignora se já estiver iniciando
-        }
+      if (!shouldKeepListeningRef.current) return;
+
+      // Se a síntese de voz ainda está falando, aguarda ela terminar
+      // antes de reativar o microfone (evita capturar a própria voz do app)
+      if (isSpeakingRef.current) {
+        const esperar = () => {
+          if (!shouldKeepListeningRef.current) return;
+          if (isSpeakingRef.current) {
+            setTimeout(esperar, 150);
+            return;
+          }
+          try { recognition.start(); } catch { /* ignora */ }
+        };
+        setTimeout(esperar, 150);
+        return;
       }
+
+      try { recognition.start(); } catch { /* ignora */ }
     };
 
     recognition.onerror = (event: ISpeechRecognitionErrorEvent) => {
       let mensagem = 'Erro no reconhecimento de voz';
       switch (event.error) {
         case 'no-speech':
-          mensagem = 'Nenhuma fala detectada';
-          break;
+          // no-speech é normal no mobile — não exibe erro, apenas reinicia
+          return;
         case 'audio-capture':
           mensagem = 'Microfone não encontrado';
           break;
@@ -142,7 +138,6 @@ export function useSpeechRecognition(
           mensagem = 'Erro de rede no reconhecimento';
           break;
         case 'aborted':
-          // silencioso: foi parado intencionalmente
           return;
       }
       setError(mensagem);
@@ -150,7 +145,7 @@ export function useSpeechRecognition(
 
     recognition.onresult = (event: ISpeechRecognitionEvent) => {
       let interim = '';
-      let final = '';
+      let final   = '';
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
@@ -161,12 +156,16 @@ export function useSpeechRecognition(
         }
       }
 
-      if (interim) {
-        setInterimTranscript(interim);
-      }
+      if (interim) setInterimTranscript(interim);
 
       if (final) {
         const textoFinal = final.trim();
+
+        // Ignora se for idêntico ao último texto já processado
+        // (acontece no mobile quando o buffer é reentregue após reinício)
+        if (textoFinal === lastProcessedTextRef.current) return;
+
+        lastProcessedTextRef.current = textoFinal;
         setInterimTranscript('');
         setFinalTranscript(textoFinal);
         onFinalResultRef.current?.(textoFinal);
@@ -177,11 +176,7 @@ export function useSpeechRecognition(
 
     return () => {
       shouldKeepListeningRef.current = false;
-      try {
-        recognition.abort();
-      } catch {
-        // ignora
-      }
+      try { recognition.abort(); } catch { /* ignora */ }
       recognitionRef.current = null;
     };
   }, [isSupported]);
@@ -193,7 +188,10 @@ export function useSpeechRecognition(
     }
     if (isListening) return;
 
+    // Limpa o último texto processado ao iniciar nova sessão de escuta
+    lastProcessedTextRef.current  = '';
     shouldKeepListeningRef.current = true;
+
     try {
       recognitionRef.current.start();
     } catch (err) {
@@ -205,11 +203,8 @@ export function useSpeechRecognition(
   const stop = useCallback(() => {
     if (!recognitionRef.current) return;
     shouldKeepListeningRef.current = false;
-    try {
-      recognitionRef.current.stop();
-    } catch {
-      // ignora
-    }
+    lastProcessedTextRef.current   = '';
+    try { recognitionRef.current.stop(); } catch { /* ignora */ }
   }, []);
 
   const toggle = useCallback(() => {
@@ -219,24 +214,24 @@ export function useSpeechRecognition(
 
   const speak = useCallback((text: string) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'pt-BR';
-    utterance.rate = 1.05;
-    utterance.pitch = 1;
-    utterance.volume = 1;
+
+    const utterance   = new SpeechSynthesisUtterance(text);
+    utterance.lang    = 'pt-BR';
+    utterance.rate    = 1.05;
+    utterance.pitch   = 1;
+    utterance.volume  = 1;
+
+    // Sinaliza que a síntese está ativa para pausar o reinício do microfone
+    isSpeakingRef.current = true;
+    utterance.onend = () => { isSpeakingRef.current = false; };
+    utterance.onerror = () => { isSpeakingRef.current = false; };
+
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
   }, []);
 
   return {
-    isListening,
-    interimTranscript,
-    finalTranscript,
-    error,
-    isSupported,
-    start,
-    stop,
-    toggle,
-    speak
+    isListening, interimTranscript, finalTranscript, error,
+    isSupported, start, stop, toggle, speak
   };
 }
