@@ -55,21 +55,24 @@ export function useSpeechRecognition(
   onFinalResult?: (text: string) => void
 ): UseSpeechRecognitionResult {
 
-  const recognitionRef          = useRef<ISpeechRecognition | null>(null);
-  const onFinalResultRef        = useRef(onFinalResult);
-  const shouldKeepListeningRef  = useRef(false);
+  const recognitionRef         = useRef<ISpeechRecognition | null>(null);
+  const onFinalResultRef       = useRef(onFinalResult);
+  const shouldKeepListeningRef = useRef(false);
 
-  // Guarda o último texto JÁ processado para não repetir o mesmo comando
-  const lastProcessedTextRef    = useRef<string>('');
+  // Quando true, descarta qualquer resultado que chegar no onresult.
+  // Não interrompemos o recognition — apenas ignoramos o que ele capturar
+  // enquanto o app está falando. Isso evita toda race condition.
+  const isSpeakingRef          = useRef(false);
 
-  // Trava o reinício enquanto a síntese de voz está falando,
-  // evitando que o microfone capture a própria resposta do app
-  const isSpeakingRef           = useRef(false);
+  // Timestamp do último resultado final processado.
+  // Só descartamos se o texto E o timestamp forem iguais (proteção contra
+  // duplicatas do buffer mobile), mas nunca descartamos comandos diferentes.
+  const lastResultRef = useRef<{ text: string; time: number }>({ text: '', time: 0 });
 
-  const [isListening, setIsListening]           = useState(false);
-  const [interimTranscript, setInterimTranscript] = useState('');
-  const [finalTranscript, setFinalTranscript]   = useState('');
-  const [error, setError]                       = useState<string | null>(null);
+  const [isListening,       setIsListening]       = useState(false);
+  const [interimTranscript, setInterimTranscript]  = useState('');
+  const [finalTranscript,   setFinalTranscript]    = useState('');
+  const [error,             setError]              = useState<string | null>(null);
 
   useEffect(() => {
     onFinalResultRef.current = onFinalResult;
@@ -81,11 +84,10 @@ export function useSpeechRecognition(
   useEffect(() => {
     if (!isSupported) return;
 
-    const SpeechRecognitionAPI =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognitionAPI) return;
+    const API = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!API) return;
 
-    const recognition = new SpeechRecognitionAPI();
+    const recognition = new API();
     recognition.lang            = 'pt-BR';
     recognition.continuous      = true;
     recognition.interimResults  = true;
@@ -100,39 +102,41 @@ export function useSpeechRecognition(
       setIsListening(false);
       setInterimTranscript('');
 
-      if (!shouldKeepListeningRef.current) return;
-
-      // Se o speak() pausou o microfone, ele mesmo vai reativá-lo depois.
-      // Não reiniciamos aqui para não competir com a lógica do speak.
-      if (isSpeakingRef.current) return;
-
-      try { recognition.start(); } catch { /* ignora */ }
+      // Reinicia automaticamente apenas se o usuário quer continuar ouvindo
+      // e o app NÃO está falando (o speak() reinicia ele mesmo quando termina)
+      if (shouldKeepListeningRef.current && !isSpeakingRef.current) {
+        try { recognition.start(); } catch { /* já está iniciando */ }
+      }
     };
 
     recognition.onerror = (event: ISpeechRecognitionErrorEvent) => {
-      let mensagem = 'Erro no reconhecimento de voz';
       switch (event.error) {
         case 'no-speech':
-          // no-speech é normal no mobile — não exibe erro, apenas reinicia
+        case 'aborted':
+          // Normais no mobile — silencioso
           return;
-        case 'audio-capture':
-          mensagem = 'Microfone não encontrado';
-          break;
         case 'not-allowed':
         case 'service-not-allowed':
-          mensagem = 'Permissão de microfone negada';
+          setError('Permissão de microfone negada');
           shouldKeepListeningRef.current = false;
-          break;
+          return;
+        case 'audio-capture':
+          setError('Microfone não encontrado');
+          return;
         case 'network':
-          mensagem = 'Erro de rede no reconhecimento';
-          break;
-        case 'aborted':
+          setError('Erro de rede no reconhecimento');
           return;
       }
-      setError(mensagem);
     };
 
     recognition.onresult = (event: ISpeechRecognitionEvent) => {
+      // Se o app está falando, descarta tudo que chegar — não interrompe,
+      // apenas ignora para não processar a própria voz como comando
+      if (isSpeakingRef.current) {
+        setInterimTranscript('');
+        return;
+      }
+
       let interim = '';
       let final   = '';
 
@@ -145,19 +149,23 @@ export function useSpeechRecognition(
         }
       }
 
-      if (interim) setInterimTranscript(interim);
+      if (interim) {
+        setInterimTranscript(interim);
+      }
 
       if (final) {
-        const textoFinal = final.trim();
+        const texto = final.trim();
+        const agora = Date.now();
 
-        // Ignora se for idêntico ao último texto já processado
-        // (acontece no mobile quando o buffer é reentregue após reinício)
-        if (textoFinal === lastProcessedTextRef.current) return;
+        // Descarta apenas se for o mesmo texto dentro de 2 segundos
+        // (proteção contra buffer duplicado do mobile)
+        const { text: ultimoTexto, time: ultimoTempo } = lastResultRef.current;
+        if (texto === ultimoTexto && agora - ultimoTempo < 2000) return;
 
-        lastProcessedTextRef.current = textoFinal;
+        lastResultRef.current = { text: texto, time: agora };
         setInterimTranscript('');
-        setFinalTranscript(textoFinal);
-        onFinalResultRef.current?.(textoFinal);
+        setFinalTranscript(texto);
+        onFinalResultRef.current?.(texto);
       }
     };
 
@@ -176,15 +184,11 @@ export function useSpeechRecognition(
       return;
     }
     if (isListening) return;
-
-    // Limpa o último texto processado ao iniciar nova sessão de escuta
-    lastProcessedTextRef.current  = '';
     shouldKeepListeningRef.current = true;
-
+    lastResultRef.current = { text: '', time: 0 };
     try {
       recognitionRef.current.start();
-    } catch (err) {
-      console.error('Erro ao iniciar reconhecimento:', err);
+    } catch {
       setError('Não foi possível iniciar o microfone');
     }
   }, [isListening]);
@@ -192,7 +196,7 @@ export function useSpeechRecognition(
   const stop = useCallback(() => {
     if (!recognitionRef.current) return;
     shouldKeepListeningRef.current = false;
-    lastProcessedTextRef.current   = '';
+    lastResultRef.current = { text: '', time: 0 };
     try { recognitionRef.current.stop(); } catch { /* ignora */ }
   }, []);
 
@@ -204,14 +208,9 @@ export function useSpeechRecognition(
   const speak = useCallback((text: string) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
 
-    // 1. Marca como falando ANTES de qualquer coisa
+    // Ativa o filtro de resultados — o recognition continua rodando,
+    // mas qualquer resultado que chegar será descartado no onresult
     isSpeakingRef.current = true;
-
-    // 2. Para o reconhecimento imediatamente — stop() (não abort())
-    //    para que o onend seja chamado mas a flag isSpeakingRef impeça o reinício
-    if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch { /* ignora */ }
-    }
 
     const utterance  = new SpeechSynthesisUtterance(text);
     utterance.lang   = 'pt-BR';
@@ -219,19 +218,18 @@ export function useSpeechRecognition(
     utterance.pitch  = 1;
     utterance.volume = 1;
 
-    const reativar = () => {
-      isSpeakingRef.current        = false;
-      lastProcessedTextRef.current = '';
-      if (shouldKeepListeningRef.current && recognitionRef.current) {
-        setTimeout(() => {
-          if (!shouldKeepListeningRef.current) return;
-          try { recognitionRef.current!.start(); } catch { /* ignora */ }
-        }, 400);
-      }
+    const onTerminou = () => {
+      // Aguarda 500ms após o fim da fala antes de reativar o microfone,
+      // tempo suficiente para o áudio do alto-falante dissipar
+      setTimeout(() => {
+        isSpeakingRef.current = false;
+        // Reseta o deduplicador para aceitar qualquer novo comando
+        lastResultRef.current = { text: '', time: 0 };
+      }, 500);
     };
 
-    utterance.onend   = reativar;
-    utterance.onerror = reativar;
+    utterance.onend   = onTerminou;
+    utterance.onerror = onTerminou;
 
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
