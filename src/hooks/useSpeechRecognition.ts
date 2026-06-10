@@ -204,11 +204,13 @@ export function useSpeechRecognition(
   const speak = useCallback((text: string) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
 
-    // Para o reconhecimento IMEDIATAMENTE antes de falar
-    // para o microfone não capturar a voz do próprio app
+    // 1. Marca como falando ANTES de qualquer coisa
     isSpeakingRef.current = true;
+
+    // 2. Para o reconhecimento imediatamente — stop() (não abort())
+    //    para que o onend seja chamado mas a flag isSpeakingRef impeça o reinício
     if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch { /* ignora */ }
+      try { recognitionRef.current.stop(); } catch { /* ignora */ }
     }
 
     const utterance  = new SpeechSynthesisUtterance(text);
@@ -218,16 +220,13 @@ export function useSpeechRecognition(
     utterance.volume = 1;
 
     const reativar = () => {
-      isSpeakingRef.current = false;
-      // Limpa o último texto processado para não bloquear o próximo comando
+      isSpeakingRef.current        = false;
       lastProcessedTextRef.current = '';
-      // Reativa o microfone somente se o usuário ainda quer ouvir
       if (shouldKeepListeningRef.current && recognitionRef.current) {
-        // Pequena pausa extra para o áudio do sistema terminar completamente
         setTimeout(() => {
           if (!shouldKeepListeningRef.current) return;
           try { recognitionRef.current!.start(); } catch { /* ignora */ }
-        }, 300);
+        }, 400);
       }
     };
 

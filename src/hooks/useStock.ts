@@ -9,7 +9,6 @@ const itensIniciais: StockItem[] = [
   { id: '2', nome: 'porca', quantidade: 200, unidade: 'un', categoria: 'Ferragem', ultimaAtualizacao: new Date() },
   { id: '3', nome: 'arruela', quantidade: 350, unidade: 'un', categoria: 'Ferragem', ultimaAtualizacao: new Date() },
   { id: '4', nome: 'caixa', quantidade: 25, unidade: 'un', categoria: 'Embalagem', ultimaAtualizacao: new Date() },
-  { id: '5', nome: 'palete', quantidade: 12, unidade: 'un', categoria: 'Embalagem', ultimaAtualizacao: new Date() }
 ];
 
 function normalizar(texto: string): string {
