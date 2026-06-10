@@ -102,20 +102,9 @@ export function useSpeechRecognition(
 
       if (!shouldKeepListeningRef.current) return;
 
-      // Se a síntese de voz ainda está falando, aguarda ela terminar
-      // antes de reativar o microfone (evita capturar a própria voz do app)
-      if (isSpeakingRef.current) {
-        const esperar = () => {
-          if (!shouldKeepListeningRef.current) return;
-          if (isSpeakingRef.current) {
-            setTimeout(esperar, 150);
-            return;
-          }
-          try { recognition.start(); } catch { /* ignora */ }
-        };
-        setTimeout(esperar, 150);
-        return;
-      }
+      // Se o speak() pausou o microfone, ele mesmo vai reativá-lo depois.
+      // Não reiniciamos aqui para não competir com a lógica do speak.
+      if (isSpeakingRef.current) return;
 
       try { recognition.start(); } catch { /* ignora */ }
     };
@@ -215,16 +204,35 @@ export function useSpeechRecognition(
   const speak = useCallback((text: string) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
 
-    const utterance   = new SpeechSynthesisUtterance(text);
-    utterance.lang    = 'pt-BR';
-    utterance.rate    = 1.05;
-    utterance.pitch   = 1;
-    utterance.volume  = 1;
-
-    // Sinaliza que a síntese está ativa para pausar o reinício do microfone
+    // Para o reconhecimento IMEDIATAMENTE antes de falar
+    // para o microfone não capturar a voz do próprio app
     isSpeakingRef.current = true;
-    utterance.onend = () => { isSpeakingRef.current = false; };
-    utterance.onerror = () => { isSpeakingRef.current = false; };
+    if (recognitionRef.current) {
+      try { recognitionRef.current.abort(); } catch { /* ignora */ }
+    }
+
+    const utterance  = new SpeechSynthesisUtterance(text);
+    utterance.lang   = 'pt-BR';
+    utterance.rate   = 1.05;
+    utterance.pitch  = 1;
+    utterance.volume = 1;
+
+    const reativar = () => {
+      isSpeakingRef.current = false;
+      // Limpa o último texto processado para não bloquear o próximo comando
+      lastProcessedTextRef.current = '';
+      // Reativa o microfone somente se o usuário ainda quer ouvir
+      if (shouldKeepListeningRef.current && recognitionRef.current) {
+        // Pequena pausa extra para o áudio do sistema terminar completamente
+        setTimeout(() => {
+          if (!shouldKeepListeningRef.current) return;
+          try { recognitionRef.current!.start(); } catch { /* ignora */ }
+        }, 300);
+      }
+    };
+
+    utterance.onend   = reativar;
+    utterance.onerror = reativar;
 
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
